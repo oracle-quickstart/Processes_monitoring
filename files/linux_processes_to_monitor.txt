@@ -1,0 +1,1 @@
+proc1=/sbin/dhclient -d -q -sf /usr/libexec/nm-dhcp-helper -pf /run/NetworkManager/dhclient-ens3.pid -lf /run/NetworkManager/dhclient-21d47e65-8523-1a06-af22-6f121086f085-ens3.lease -cf /var/lib/NetworkManager/dhclient-ens3.conf ens3

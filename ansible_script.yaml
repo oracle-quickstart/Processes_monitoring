@@ -1,0 +1,207 @@
+- hosts: all
+  gather_facts: no
+  collections: oracle.oci
+
+  tasks:
+    - name: Block for windows vms
+      block:
+        - name: Get windows vm password secret
+          local_action:
+            module: oci_secrets_secret_bundle_facts
+            auth_type: "{% if run_from_local|lower  == 'yes'%}api_key{% elif run_from_local|lower =='no' %}instance_principal{% endif %}"
+            vault_id: "{{ vault_ocid }}"
+            secret_name: "{{ win_secret_name }}"
+            stage: "CURRENT"
+          when: use_vault | bool
+          register: secret_content
+
+        - name: Download python
+          ansible.windows.win_get_url:
+            url: https://www.python.org/ftp/python/3.9.6/python-3.9.6-amd64.exe
+            dest: C:\python-3.9.6.exe
+          register: python_downloaded
+
+        - name: Install python
+          ansible.windows.win_package:
+            path: "{{ python_downloaded.dest }}"
+            arguments:
+              - /quiet
+              - InstallAllUsers=1
+              - PrependPath=1
+              - Include_test=1
+              - TargetDir=C:\Python39\
+          ignore_errors: yes
+          register: installed_python3
+
+        - name: Fail message for Install python task
+          fail:
+            msg: "You already have python version 3.9.6 installed, uninstall it and run the script again"
+          when: installed_python3.rc != 0
+
+        - name: find python folder
+          ansible.windows.win_find:
+            paths: C:\
+            file_type: directory
+            patterns: ["*Python39*"]
+          register: found_python
+
+        - name: find python executable
+          ansible.windows.win_find:
+            paths: "{{ found_python.files[0].path }}"
+            patterns: ["python.exe"]
+          register: found_python_executable
+
+        - set_fact:
+            python_executable: "{{ found_python_executable.files[0].path }}"
+
+        - name: Set python ENV variable
+          ansible.windows.win_environment:
+            state: present
+            name: python
+            value: "{{ python_executable }}"
+            level: machine
+
+        - name: Install specified python requirements
+          ansible.windows.win_command: "{{python_executable }} -m pip install oci psutil pytz pyinstaller"
+          register: installed_pip_modules
+
+        - name: Set pyisntaller ENV variable
+          ansible.windows.win_environment:
+            state: present
+            name: pyinstaller
+            value: '{{ found_python.files[0].path }}\Scripts\pyinstaller.exe'
+            level: machine
+
+        - name: Copy the processes file on vm
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}{{ win_processes_file_location }}"
+            dest: "{{ win_processes_file_destination }}"
+          register: proc_file_copied
+
+        - set_fact:
+            proc_file_remote_location: "{{ win_processes_file_destination }}win_processes_to_monitor.txt"
+
+        - name: Copy the custom metrics script
+          copy:
+            src: "{{ playbook_dir }}/files/custom-metrics.py"
+            dest: "{{ win_custom_metric_script_destination }}"
+          register: script_copied
+
+        - set_fact:
+            script_remote_location: "{{ win_custom_metric_script_destination }}custom-metrics.py"
+
+        - name: install win_nssm
+          win_chocolatey:
+            name: nssm
+
+        - name: make the script executable
+          ansible.windows.win_command: pyinstaller --onefile .\custom-metrics.py
+          args:
+            chdir: "{{ win_custom_metric_script_destination }}"
+          ignore_errors: yes
+          register: executable_python
+
+        - name: Block if making the script executable failed due to Access denied
+          block:
+            - name: remove Process_monitoring_service
+              win_nssm:
+                name: "Process_monitoring_service"
+                state: absent
+
+            - name: make the script executable
+              ansible.windows.win_command: pyinstaller --onefile .\custom-metrics.py
+              args:
+                chdir: "{{ win_custom_metric_script_destination }}"
+              register: executable_python
+
+          when: '"Access is denied" in executable_python.stderr'
+
+        - name: Create windows service
+          win_nssm:
+            name: "Process_monitoring_service"
+            application: '{{ win_custom_metric_script_destination }}dist\custom-metrics.exe'
+            state: stopped
+            start_mode: auto
+            arguments:
+              - "-comp {{ compartment_id }} -metric_nmspace {{ metric_namespace }} -metric_name {{ metric_name }} -proc_file {{ proc_file_remote_location }} -telemetry {{ telemetry_url }}"
+            working_directory: '{{ win_custom_metric_script_destination }}dist\'
+            stderr_file: "{{ win_custom_metric_script_destination }}error.log"
+
+        - name: Set service startup mode to auto and ensure it is started
+          ansible.windows.win_service:
+            name: Process_monitoring_service
+            start_mode: auto
+            state: started
+
+      when: inventory_hostname in groups["Windows"]
+
+    - name: Block for Linux vms
+      block:
+        - name: Install python
+          package:
+            name: python3
+          become: true
+
+        - name: Install specified python requirements
+          pip:
+            name:
+              - oci
+              - psutil
+              - pytz
+            state: present
+
+        - name: Copy the processes file on vm
+          copy:
+            src: "{{ playbook_dir }}{{ linux_processes_file_location }}"
+            dest: "{{ processes_file_destination }}"
+          register: proc_file_copied
+
+        - set_fact:
+            proc_file_remote_location: "{{ proc_file_copied.dest }}"
+
+        - name: Copy the custom metrics script
+          copy:
+            src: "{{ playbook_dir }}/files/custom-metrics.py"
+            dest: "{{ custom_metric_script_destination }}"
+          register: script_copied
+
+        - set_fact:
+            script_remote_location: "{{ script_copied.dest }}"
+
+        - name: Copy service template file
+          template:
+            src: "{{ playbook_dir }}/templates/custom_metrics.service"
+            dest: /lib/systemd/system/custom_metrics.service
+            mode: 644
+          become: true
+          register: template_file_copied
+
+        - set_fact:
+            template_location: "{{ template_file_copied.dest }}"
+
+        - name: reload systemctl
+          command: systemctl daemon-reload
+          become: true
+
+        - name: Create the service
+          service:
+            name: custom_metrics.service
+            state: restarted
+            enabled: yes
+          become: true
+          register: service_resp
+
+        - set_fact:
+            service_info:
+              {
+                "name": "{{ service_resp.name }}",
+                "state": "{{ service_resp.state }}",
+                "enabled": "{{ service_resp.enabled }}",
+                "failed": "{{ service_resp.failed }}",
+              }
+
+        - name: show the service status
+          debug:
+            var: service_info
+
+      when: inventory_hostname in groups["Linux"]

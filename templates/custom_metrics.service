@@ -1,0 +1,14 @@
+[Unit]
+Description=Custom metrics service
+After=multi-user.target
+[Service]
+Type=simple
+Restart=on-failure
+ExecStart=/usr/bin/python3 {{script_remote_location}} -comp {{compartment_id}} -metric_nmspace {{metric_namespace}} -metric_name {{metric_name}} -proc_file {{proc_file_remote_location}} -telemetry {{telemetry_url}}
+User=root
+Group=root
+[Install]
+WantedBy=multi-user.target
+
+
+
