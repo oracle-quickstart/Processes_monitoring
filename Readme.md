@@ -24,7 +24,14 @@ The Ansible playbook will do all the work, it will copy the processes file and t
 
 ## Requirements
 
-- Ansible installed on your computer. [click here for documentation](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html)
+- Ansible installed. [click here for documentation](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html)
+- Python3 installed.
+- Run the following commands:
+```
+ansible-galaxy collection install oracle.oci
+ansible-galaxy collection install chocolatey.chocolatey
+sudo python3 -m pip install pywinrm
+```
 - ssh acces to all the Linux hosts on which you want to deploy the monitoring solution
 - All the hosts on which you want to monitor the processes needs to have instance principal privileges
     - To do that, you need to either create a dynamic group or edit an existing one and add a mathing rule to contain the instances compartment ocid; and create a policy for it.
@@ -42,13 +49,10 @@ The Ansible playbook will do all the work, it will copy the processes file and t
     - Run the following commmand in a powershell,or for new windows hosts add it in the cloud inint:
         - winrm quickconfig -quiet
 
-- The instance needs to have access to the internet to download python:
+- The instances needs to have access to the internet to download python:
     - The subnet in which the instance resides needs to have a route to a NAT gateway(for private subnets) or Internet gateway(public subnets)       
 
-- On the instance running the ansible playbook(Control node), run the following commands:
-    - ansible-galaxy collection install oracle.oci
-    - ansible-galaxy collection install chocolatey.chocolatey
-    - sudo python3 -m pip install pywinrm
+
 - If the password is stored in a vault, the instance running the ansible playbook will need access to it:
     - The instance needs to be in a dynamic group:
         - instance.compartment.id = 'ocid1.compartment.oc1..aaaaaaaavrz'
