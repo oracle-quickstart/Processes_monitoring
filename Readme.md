@@ -129,8 +129,12 @@ run_from_local=yes
 ansible_winrm_user=opc
 input_windows_password=Password
 
-
-
+#DON'T EDIT BELOW VARIABLES
+ansible_winrm_password="{% if use_vault == 'yes'%}{{ secret_content.secret_bundle.secret_bundle_content.content | b64decode }}{% else %}{{input_windows_password}}{% endif %}"
+ansible_connection=winrm
+ansible_winrm_server_cert_validation=ignore
+ansible_winrm_transport=basic
+ansible_pipelining=false
 ###################################################################
 [Linux:vars]
 
@@ -154,11 +158,6 @@ metric_name=Process_metric
 
 #DON'T EDIT BELOW VARIABLES
 
-ansible_winrm_password="{% if use_vault == 'yes'%}{{ secret_content.secret_bundle.secret_bundle_content.content | b64decode }}{% else %}{{input_windows_password}}{% endif %}"
-ansible_connection=winrm
-ansible_winrm_server_cert_validation=ignore
-ansible_winrm_transport=basic
-ansible_pipelining=false
 win_processes_file_location=/files/win_processes_to_monitor.txt 
 win_processes_file_destination=C:/processes_metrics/
 win_custom_metric_script_destination=C:/processes_metrics/
@@ -192,6 +191,12 @@ run_from_local= If you run the Ansible script from your computer put yes. If you
 ansible_winrm_user = Windows Login User.
 input_windows_password = Put the Windows Instances password here if you're not using the OCI Vault.
 
+#DON'T EDIT BELOW VARIABLES
+ansible_winrm_password = If use_vault is set to yes, will use the password from the vault. If not, it will take the value from input_windows_password.
+ansible_connection = Type of connection for Windows Hosts.
+ansible_winrm_server_cert_validation = If it should validate winrm_server_cert.
+ansible_winrm_transport = Type of winrm transport.
+ansible_pipelining = Pipelining is set to false.
 ###################################################################
 [Linux:vars] - Specific Variables for Linux Hosts.
 
@@ -213,13 +218,6 @@ metric_name = Set a name for the metric.
 
 #DON'T EDIT BELOW VARIABLES
 
-ansible_winrm_password = If use_vault is set to yes, will use the password from the vault. If not, it will take the value from input_windows_password.
-
-
-ansible_connection = Type of connection for Windows Hosts.
-ansible_winrm_server_cert_validation = If it should validate winrm_server_cert.
-ansible_winrm_transport = Type of winrm transport.
-ansible_pipelining = Pipelining is set to false.
 win_processes_file_location = The path to the Windows processes file to monitor
 win_processes_file_destination = The path to put the Windows processes file on the Windows Hosts.
 win_custom_metric_script_destination = The path to put the metric Python script on the Windows Hosts.
