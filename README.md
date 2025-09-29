@@ -247,3 +247,11 @@ telemetry_url = The Telemetry url where to send the metrics.
 - Under Metric dimensions you will have Dimensions name and Dimensions value
     - Dimension name - here you will see the name of the instance 
     - Dimension value - here you will see the process names and metric names
+
+## Contributing
+
+This project welcomes contributions from the community. Before submitting a pull request, please [review our contribution guide](./CONTRIBUTING.md)
+
+## Security
+
+Please consult the [security guide](./SECURITY.md) for our responsible security vulnerability disclosure process
